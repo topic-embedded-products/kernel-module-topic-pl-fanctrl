@@ -7,10 +7,9 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
-#define NR_CHANNEL 3
-
 struct topic_fanctrl_data {
 	u32 __iomem *regs;
+	u32 nr_fans;
 };
 
 static void topic_fanctrl_write_reg(struct topic_fanctrl_data *data, u32 index, u32 value)
@@ -25,10 +24,11 @@ static u32 topic_fanctrl_read_reg(struct topic_fanctrl_data *data, u32 index)
 
 static void topic_fanctrl_init(struct topic_fanctrl_data *data, u32 speed)
 {
-	topic_fanctrl_write_reg(data, 0, speed ? 0x7 : 0); /* Enable all three fans */
-	topic_fanctrl_write_reg(data, 1, speed);
-	topic_fanctrl_write_reg(data, 2, speed);
-	topic_fanctrl_write_reg(data, 3, speed);
+	u32 i;
+
+	topic_fanctrl_write_reg(data, 0, speed ? (1 << data->nr_fans) - 1 : 0);
+	for (i = 0; i < data->nr_fans; ++i)
+		topic_fanctrl_write_reg(data, i + 1, speed);
 }
 
 static int topic_fanctrl_read_fan(struct device *dev, u32 attr, int channel,
@@ -40,7 +40,7 @@ static int topic_fanctrl_read_fan(struct device *dev, u32 attr, int channel,
 	switch (attr) {
 	case hwmon_fan_input:
 		/* Register is time between tacho pulses in f=100MHz clocks */
-		reg = topic_fanctrl_read_reg(data, 2 + NR_CHANNEL + channel);
+		reg = topic_fanctrl_read_reg(data, 2 + data->nr_fans + channel);
 		if (reg)
 			/* Assume 2 pulses per round, then (60 * f) / (2 * r) rpm */
 			*val = (long)(3000000000u / reg);
@@ -52,11 +52,12 @@ static int topic_fanctrl_read_fan(struct device *dev, u32 attr, int channel,
 	}
 }
 
-static umode_t topic_fanctrl_fan_is_visible(const void *_data, u32 attr, int channel)
+static umode_t topic_fanctrl_fan_is_visible(
+	struct topic_fanctrl_data *data, u32 attr, int channel)
 {
 	switch (attr) {
 	case hwmon_fan_input:
-		if (channel < NR_CHANNEL)
+		if (channel < data->nr_fans)
 			return S_IRUGO;
 		return 0;
 	default:
@@ -111,12 +112,13 @@ static int topic_fanctrl_write_pwm(struct device *dev, u32 attr, int channel,
 	}
 }
 
-static umode_t topic_fanctrl_pwm_is_visible(const void *_data, u32 attr, int channel)
+static umode_t topic_fanctrl_pwm_is_visible(
+	struct topic_fanctrl_data *data, u32 attr, int channel)
 {
 	switch (attr) {
 	case hwmon_pwm_input:
 	case hwmon_pwm_enable:
-		if (channel < NR_CHANNEL)
+		if (channel < data->nr_fans)
 			return S_IRUGO | S_IWUSR;
 		return 0;
 	default:
@@ -148,10 +150,12 @@ static int topic_fanctrl_write(struct device *dev, enum hwmon_sensor_types type,
 	}
 }
 
-static umode_t topic_fanctrl_is_visible(const void *data,
+static umode_t topic_fanctrl_is_visible(const void *context,
 				   enum hwmon_sensor_types type,
 				   u32 attr, int channel)
 {
+	struct topic_fanctrl_data *data = context;
+
 	switch (type) {
 	case hwmon_fan:
 		return topic_fanctrl_fan_is_visible(data, attr, channel);
@@ -161,6 +165,8 @@ static umode_t topic_fanctrl_is_visible(const void *data,
 		return 0;
 	}
 }
+
+/* Static structures support up to 3 fans */
 
 static const u32 topic_fanctrl_fan_config[] = {
 	HWMON_F_INPUT,
@@ -228,6 +234,13 @@ static int topic_fanctrl_probe(struct platform_device *pdev)
 	if (IS_ERR(data->regs))
 		return PTR_ERR(data->regs);
 
+	err = of_property_read_u32(pdev->dev.of_node, "nr-fans",
+				   &data->nr_fans);
+	if (err) {
+		dev_err(&pdev->dev, "nr-fans missing in devicetree\n");
+		return -ENODEV;
+	}
+
 	err = of_property_read_u32(pdev->dev.of_node, "topic,initial-pwm",
 				   &speed);
 	if (err)
@@ -237,9 +250,8 @@ static int topic_fanctrl_probe(struct platform_device *pdev)
 	topic_fanctrl_init(data, speed);
 
 	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev, "topicfan",
-							 data,
-							 &topic_fanctrl_chip_info,
-							 NULL);
+			data, &topic_fanctrl_chip_info, NULL);
+
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
