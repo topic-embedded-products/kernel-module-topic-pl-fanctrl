@@ -101,10 +101,10 @@ static int topic_fanctrl_write_pwm(struct device *dev, u32 attr, int channel,
 		topic_fanctrl_write_reg(data, 0, reg);
 		return 0;
 	case hwmon_pwm_input:
-		if (val < 25)
-			val = 25;
-		if (val > 100)
-			val = 100;
+		if (val < 0)
+			val = 0;
+		if (val > 255)
+			val = 255;
 		topic_fanctrl_write_reg(data, 1 + channel, (u32)val);
 		return 0;
 	default:
@@ -215,7 +215,7 @@ static int topic_fanctrl_probe(struct platform_device *pdev)
 	struct topic_fanctrl_data *data;
 	struct resource *res;
 	struct device *hwmon_dev;
-	u32 speed = 25;
+	u32 speed = 50;
 	int err;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
