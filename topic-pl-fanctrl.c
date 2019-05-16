@@ -101,10 +101,8 @@ static int topic_fanctrl_write_pwm(struct device *dev, u32 attr, int channel,
 		topic_fanctrl_write_reg(data, 0, reg);
 		return 0;
 	case hwmon_pwm_input:
-		if (val < 0)
-			val = 0;
-		if (val > 255)
-			val = 255;
+		if (val < 0 || val > 255)
+			return -EINVAL;
 		topic_fanctrl_write_reg(data, 1 + channel, (u32)val);
 		return 0;
 	default:
