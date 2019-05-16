@@ -53,7 +53,7 @@ static int topic_fanctrl_read_fan(struct device *dev, u32 attr, int channel,
 }
 
 static umode_t topic_fanctrl_fan_is_visible(
-	struct topic_fanctrl_data *data, u32 attr, int channel)
+	const struct topic_fanctrl_data *data, u32 attr, int channel)
 {
 	switch (attr) {
 	case hwmon_fan_input:
@@ -113,7 +113,7 @@ static int topic_fanctrl_write_pwm(struct device *dev, u32 attr, int channel,
 }
 
 static umode_t topic_fanctrl_pwm_is_visible(
-	struct topic_fanctrl_data *data, u32 attr, int channel)
+	const struct topic_fanctrl_data *data, u32 attr, int channel)
 {
 	switch (attr) {
 	case hwmon_pwm_input:
@@ -154,7 +154,7 @@ static umode_t topic_fanctrl_is_visible(const void *context,
 				   enum hwmon_sensor_types type,
 				   u32 attr, int channel)
 {
-	struct topic_fanctrl_data *data = context;
+	const struct topic_fanctrl_data *data = context;
 
 	switch (type) {
 	case hwmon_fan:
