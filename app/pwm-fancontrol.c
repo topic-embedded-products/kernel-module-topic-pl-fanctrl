@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+static int watchdog_fd;
+
 static void usage(const char *prog)
 {
 	printf(
@@ -70,6 +72,9 @@ void signal_handler(int sig)
 	case SIGHUP:
 		break;
 	case SIGTERM:
+		/* Write magic cookie to stop the watchdog */
+		if (watchdog_fd != -1)
+			write(watchdog_fd, "V", 1);
 		exit(0);
 		break;
 	}
@@ -136,7 +141,6 @@ int main(int argc, char * const *argv)
 	int cpu_fan_pwm;
 	int r;
 	int i;
-	int watchdog_fd;
 
 	while ((opt = getopt(argc, argv, "di:p:t:v")) != -1) {
 		switch (opt) {
