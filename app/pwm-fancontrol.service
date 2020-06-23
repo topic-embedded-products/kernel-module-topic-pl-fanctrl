@@ -1,0 +1,12 @@
+[Unit]
+Description=Temperature controlled PWM fan
+DefaultDependencies=no
+After=fpga-firmware-load.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pwm-fancontrol.sh
+
+[Install]
+RequiredBy=systemd-modules-load.service
+WantedBy=multi-user.target
