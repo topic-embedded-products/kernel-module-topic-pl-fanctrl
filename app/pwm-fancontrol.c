@@ -18,8 +18,8 @@ static void usage(const char *prog)
 		"-d  Deamonize, run in background\n"
 		"-v  Verbose mode\n"
 		"-i  Write process ID into pidfile\n"
-		"-t  File to read temperature from (hwmon)\n"
-		"-p  File to write PWM value to (hwmon)\n"
+		"-t  File to read temperature from (hwmon), at least one\n"
+		"-p  File to write PWM value to (hwmon), at least one\n"
 		"\n", prog);
 }
 
@@ -128,10 +128,23 @@ static void daemonize(const char *lock_file)
 	signal(SIGTERM, signal_handler);
 }
 
+struct stringlist {
+	struct stringlist *next;
+	const char* item;
+};
+
+static struct stringlist *stringlist_add(struct stringlist *list, const char* item)
+{
+	struct stringlist *result = malloc(sizeof(struct stringlist));
+	result->next = list;
+	result->item = item;
+	return result;
+}
+
 int main(int argc, char * const *argv)
 {
-	const char *pwm_file = NULL;
-	const char *temp_file = NULL;
+	struct stringlist *pwm_files = NULL;
+	struct stringlist *temp_files = NULL;
 	const char *lock_file = NULL;
 	int verbose = 0;
 	int deamon = 0;
@@ -151,10 +164,10 @@ int main(int argc, char * const *argv)
 			lock_file = optarg;
 			break;
 		case 'p':
-			pwm_file = optarg;
+			pwm_files = stringlist_add(pwm_files, optarg);
 			break;
 		case 't':
-			temp_file = optarg;
+			temp_files = stringlist_add(temp_files, optarg);
 			break;
 		case 'v':
 			verbose = 1;
@@ -165,13 +178,14 @@ int main(int argc, char * const *argv)
 		}
 	}
 
-	if (!pwm_file || !temp_file) {
+	if (!pwm_files || !temp_files) {
 		printf("ERROR: PWM and temp filenames are mandatory\n\n");
 		usage(argv[0]);
 		return 1;
 	}
 
-	r = read_sys_file_int(pwm_file, &fan_pwm);
+	/* Assume all fans were initialized to the same speed */
+	r = read_sys_file_int(pwm_files->item, &fan_pwm);
 	if (r < 0)
 		fan_pwm = 0; /* assume the worst */
 
@@ -182,9 +196,17 @@ int main(int argc, char * const *argv)
 	watchdog_fd = open("/dev/watchdog", O_WRONLY);
 
 	for(;;) {
-		r = read_sys_file_int(temp_file, &cpu_temp);
-		if (r < 0)
-			cpu_temp = 100000; /* assume the worst */
+		struct stringlist *head;
+
+		/* Take the maximum of all temperature resdings */
+		cpu_temp = 0;
+		for (head = temp_files; head; head = head->next) {
+			r = read_sys_file_int(head->item, &i);
+			if (r < 0)
+				i = 100000; /* assume the worst */
+			if (i > cpu_temp)
+				cpu_temp = i;
+		}
 
 		/* Target for CPU temp is ~70 degrees, so PWM=255 at 80 and PWM=25 at 50 */
 		cpu_fan_pwm = (cpu_temp - 46850) / 130;
@@ -196,7 +218,8 @@ int main(int argc, char * const *argv)
 			cpu_fan_pwm = 25;
 
 		if (cpu_fan_pwm != fan_pwm) {
-			write_sys_file_int(pwm_file, cpu_fan_pwm);
+			for (head = pwm_files; head; head = head->next)
+				write_sys_file_int(head->item, cpu_fan_pwm);
 			fan_pwm = cpu_fan_pwm;
 		}
 
