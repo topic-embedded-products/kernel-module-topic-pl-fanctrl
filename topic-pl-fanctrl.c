@@ -213,6 +213,7 @@ static int topic_fanctrl_probe(struct platform_device *pdev)
 	struct topic_fanctrl_data *data;
 	struct resource *res;
 	struct device *hwmon_dev;
+	const char *label;
 	u32 speed = 50;
 	int err;
 
@@ -247,7 +248,10 @@ static int topic_fanctrl_probe(struct platform_device *pdev)
 
 	topic_fanctrl_init(data, speed);
 
-	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev, "topicfan",
+	label = of_get_property(pdev->dev.of_node, "label", NULL);
+	if (!label)
+		label = "topicfan";
+	hwmon_dev = devm_hwmon_device_register_with_info(&pdev->dev, label,
 			data, &topic_fanctrl_chip_info, NULL);
 
 	return PTR_ERR_OR_ZERO(hwmon_dev);
