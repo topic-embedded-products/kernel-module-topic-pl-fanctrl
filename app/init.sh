@@ -14,7 +14,7 @@ stop)
 restart)
 	echo -n "Restart FAN control"
 	kill `cat /run/pwm-fancontrol.pid` || true
-	/usr/bin/pwm-fancontrol.sh -d -i /run/pwm-fancontrol.pid
+	/usr/bin/pwm-fancontrol.sh -d -i /run/pwm-fancontrol.pid -w /dev/watchdog
 	;;
 *)
 	echo "Usage: $0 {start|stop}"

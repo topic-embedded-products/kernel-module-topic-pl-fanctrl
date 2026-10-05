@@ -9,17 +9,18 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-static int watchdog_fd;
+static int watchdog_fd = -1;
 
 static void usage(const char *prog)
 {
 	printf(
-		"Usage: %s [-d] [-v] [-i pidfile] -t temperature -p pwm\n"
+		"Usage: %s [-d] [-v] [-i pidfile] [-w watchdog] -t temperature -p pwm\n"
 		"-d  Deamonize, run in background\n"
 		"-v  Verbose mode\n"
 		"-i  Write process ID into pidfile\n"
 		"-t  File to read temperature from (hwmon), at least one\n"
 		"-p  File to write PWM value to (hwmon), at least one\n"
+		"-w  Watchdog file to write periodically, usually /dev/watchdog\n"
 		"\n", prog);
 }
 
@@ -145,6 +146,7 @@ int main(int argc, char * const *argv)
 {
 	struct stringlist *pwm_files = NULL;
 	struct stringlist *temp_files = NULL;
+	const char *watchdog_file = NULL;
 	const char *lock_file = NULL;
 	int verbose = 0;
 	int deamon = 0;
@@ -155,7 +157,7 @@ int main(int argc, char * const *argv)
 	int r;
 	int i;
 
-	while ((opt = getopt(argc, argv, "di:p:t:v")) != -1) {
+	while ((opt = getopt(argc, argv, "di:p:t:vw:")) != -1) {
 		switch (opt) {
 		case 'd':
 			deamon = 1;
@@ -171,6 +173,9 @@ int main(int argc, char * const *argv)
 			break;
 		case 'v':
 			verbose = 1;
+			break;
+		case 'w':
+			watchdog_file = optarg;
 			break;
 		default: /* '?' */
 			usage(argv[0]);
@@ -193,7 +198,8 @@ int main(int argc, char * const *argv)
 		daemonize(lock_file);
 
 	/* The deamon part */
-	watchdog_fd = open("/dev/watchdog", O_WRONLY);
+	if (watchdog_file)
+		watchdog_fd = open(watchdog_file, O_WRONLY);
 
 	for(;;) {
 		struct stringlist *head;
